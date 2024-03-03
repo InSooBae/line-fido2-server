@@ -41,12 +41,16 @@ public class EmbeddedRedisServerConfig {
     @PostConstruct
     public void startRedis() throws IOException {
         int port = isRedisRunning() ? findAvailablePort() : redisPort;
-        redisServer = new RedisServer(port);
+        redisServer = redisServer.builder()
+                .port(port)
+                .setting("maxmemory 128M")
+                        .build();
+
         redisServer.start();
     }
 
     @PreDestroy
-    public void stopRedis() {
+    public void stopRedis() throws IOException {
         redisServer.stop();
     }
 
@@ -67,9 +71,15 @@ public class EmbeddedRedisServerConfig {
     }
 
     private Process executeGrepProcessCommand(int port) throws IOException {
-        String command = String.format("netstat -nat | grep LISTEN|grep %d", port);
-        String[] shell = {"/bin/sh", "-c", command};
-        return Runtime.getRuntime().exec(shell);
+        if (System.getProperty("os.name").startsWith("Windows")) {
+            String command = String.format("netstat -ano | findstr LISTENING | findstr %d", port);
+            String[] shell = {"cmd.exe", "/c", command};
+            return Runtime.getRuntime().exec(shell);
+        } else {
+            String command = String.format("netstat -nat | grep LISTEN|grep %d", port);
+            String[] shell = {"/bin/sh", "-c", command};
+            return Runtime.getRuntime().exec(shell);
+        }
     }
 
     private boolean isRunning(Process process) {
